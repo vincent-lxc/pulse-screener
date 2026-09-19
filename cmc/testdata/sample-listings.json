@@ -1,0 +1,131 @@
+{
+  "status": {
+    "timestamp": "2026-09-19T00:00:00.000Z",
+    "error_code": 0,
+    "error_message": "",
+    "elapsed": 12,
+    "credit_count": 1
+  },
+  "data": [
+    {
+      "id": 1,
+      "name": "Bitcoin",
+      "symbol": "BTC",
+      "slug": "bitcoin",
+      "cmc_rank": 1,
+      "circulating_supply": 19800000,
+      "total_supply": 19800000,
+      "max_supply": 21000000,
+      "last_updated": "2026-09-19T00:00:00.000Z",
+      "quote": {
+        "USD": {
+          "price": 64210.55,
+          "volume_24h": 28450000000,
+          "percent_change_1h": 0.21,
+          "percent_change_24h": 1.84,
+          "percent_change_7d": -2.11,
+          "market_cap": 1271400000000,
+          "market_cap_dominance": 54.2,
+          "fully_diluted_market_cap": 1348410000000,
+          "last_updated": "2026-09-19T00:00:00.000Z"
+        }
+      }
+    },
+    {
+      "id": 1027,
+      "name": "Ethereum",
+      "symbol": "ETH",
+      "slug": "ethereum",
+      "cmc_rank": 2,
+      "circulating_supply": 120500000,
+      "total_supply": 120500000,
+      "max_supply": 0,
+      "last_updated": "2026-09-19T00:00:00.000Z",
+      "quote": {
+        "USD": {
+          "price": 2688.4,
+          "volume_24h": 14220000000,
+          "percent_change_1h": -0.12,
+          "percent_change_24h": 0.76,
+          "percent_change_7d": 3.45,
+          "market_cap": 323950000000,
+          "market_cap_dominance": 13.8,
+          "fully_diluted_market_cap": 323950000000,
+          "last_updated": "2026-09-19T00:00:00.000Z"
+        }
+      }
+    },
+    {
+      "id": 52,
+      "name": "XRP",
+      "symbol": "XRP",
+      "slug": "xrp",
+      "cmc_rank": 3,
+      "circulating_supply": 56000000000,
+      "total_supply": 99980000000,
+      "max_supply": 100000000000,
+      "last_updated": "2026-09-19T00:00:00.000Z",
+      "quote": {
+        "USD": {
+          "price": 0.612,
+          "volume_24h": 2100000000,
+          "percent_change_1h": 0.44,
+          "percent_change_24h": 4.12,
+          "percent_change_7d": 1.02,
+          "market_cap": 34272000000,
+          "market_cap_dominance": 1.46,
+          "fully_diluted_market_cap": 61200000000,
+          "last_updated": "2026-09-19T00:00:00.000Z"
+        }
+      }
+    },
+    {
+      "id": 1839,
+      "name": "BNB",
+      "symbol": "BNB",
+      "slug": "bnb",
+      "cmc_rank": 4,
+      "circulating_supply": 145800000,
+      "total_supply": 145800000,
+      "max_supply": 200000000,
+      "last_updated": "2026-09-19T00:00:00.000Z",
+      "quote": {
+        "USD": {
+          "price": 586.2,
+          "volume_24h": 1800000000,
+          "percent_change_1h": 0.08,
+          "percent_change_24h": -0.95,
+          "percent_change_7d": 2.2,
+          "market_cap": 85468000000,
+          "market_cap_dominance": 3.64,
+          "fully_diluted_market_cap": 117240000000,
+          "last_updated": "2026-09-19T00:00:00.000Z"
+        }
+      }
+    },
+    {
+      "id": 5426,
+      "name": "Solana",
+      "symbol": "SOL",
+      "slug": "solana",
+      "cmc_rank": 5,
+      "circulating_supply": 467000000,
+      "total_supply": 588000000,
+      "max_supply": 0,
+      "last_updated": "2026-09-19T00:00:00.000Z",
+      "quote": {
+        "USD": {
+          "price": 148.33,
+          "volume_24h": 3600000000,
+          "percent_change_1h": 0.91,
+          "percent_change_24h": 6.28,
+          "percent_change_7d": 9.4,
+          "market_cap": 69270000000,
+          "market_cap_dominance": 2.95,
+          "fully_diluted_market_cap": 87218000000,
+          "last_updated": "2026-09-19T00:00:00.000Z"
+        }
+      }
+    }
+  ]
+}

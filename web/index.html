@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pulse Screener · CoinMarketCap</title>
+  <style>
+    :root {
+      --ink: #07110d;
+      --panel: #0d1a14;
+      --line: #1d3a2c;
+      --mint: #3dffb0;
+      --gold: #f5c16c;
+      --rose: #ff6b7a;
+      --fog: #9bb5a8;
+      --paper: #e8fff4;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--ink); color: var(--paper); font-family: "IBM Plex Sans", "Source Han Sans SC", sans-serif; }
+    body { min-height: 100vh; }
+    a { color: var(--mint); }
+    header {
+      display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+      padding: 20px 24px 12px; border-bottom: 1px solid var(--line);
+    }
+    .brand { display: flex; flex-direction: column; gap: 4px; }
+    .brand strong { font-size: 22px; letter-spacing: 0.08em; }
+    .brand span { color: var(--fog); font-size: 13px; }
+    .status {
+      max-width: 520px; font-size: 13px; line-height: 1.5; color: var(--fog);
+      padding: 10px 12px; border: 1px solid var(--line); background: var(--panel);
+    }
+    .status.error { border-color: var(--rose); color: #ffc9cf; }
+    .status.sample { border-color: var(--gold); color: #ffe4ad; }
+    main { padding: 16px 24px 40px; display: grid; gap: 16px; }
+    .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+    .metric { background: var(--panel); border: 1px solid var(--line); padding: 12px; }
+    .metric label { display: block; color: var(--fog); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+    .metric b { font-size: 18px; }
+    form.filters, .auth, .side {
+      background: var(--panel); border: 1px solid var(--line); padding: 12px;
+    }
+    form.filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; align-items: end; }
+    label { display: grid; gap: 4px; font-size: 12px; color: var(--fog); }
+    input, select, button {
+      width: 100%; background: #06140f; color: var(--paper); border: 1px solid var(--line);
+      padding: 8px; font: inherit;
+    }
+    button { cursor: pointer; background: var(--mint); color: #042015; font-weight: 700; border: 0; }
+    button.ghost { background: transparent; color: var(--mint); border: 1px solid var(--mint); }
+    .layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; }
+    .detail {
+      background: var(--panel); border: 1px solid var(--mint); padding: 12px; margin-bottom: 12px;
+    }
+    .detail .badge { color: var(--mint); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; }
+    .detail h3 { margin: 6px 0 10px; }
+    .detail.idle { border-color: var(--line); color: var(--fog); }
+    tr.coin { cursor: pointer; }
+    tr.coin:hover, tr.coin.selected { background: #10261c; }
+    table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+    th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); font-size: 13px; }
+    th { color: var(--fog); font-weight: 500; }
+    .up { color: var(--mint); }
+    .down { color: var(--rose); }
+    .empty, .loading { padding: 24px; color: var(--fog); }
+    .watch-item, .alert-item {
+      display: flex; justify-content: space-between; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line);
+    }
+    .tiny { font-size: 12px; color: var(--fog); }
+    footer { padding: 0 24px 24px; color: var(--fog); font-size: 12px; }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      header, main, footer { padding-left: 14px; padding-right: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <strong>PULSE SCREENER</strong>
+      <span>Markets &amp; Trading Tools · CoinMarketCap API Hackathon · #BuildwithCMC</span>
+    </div>
+    <div id="statusBox" class="status loading">正在读取采集状态…</div>
+  </header>
+  <main>
+    <section id="metrics" class="metrics"></section>
+    <form class="filters" id="filterForm">
+      <label>搜索 Search<input name="q" placeholder="BTC / Ethereum" /></label>
+      <label>24h 最低涨跌 %<input name="minChange24h" type="number" step="0.1" placeholder="例如 2" /></label>
+      <label>最低成交额 USD<input name="minVolume24h" type="number" step="1000000" placeholder="10000000" /></label>
+      <label>市值分档
+        <select name="capBand">
+          <option value="">全部</option>
+          <option value="micro">Micro &lt; $100M</option>
+          <option value="small">Small $100M–$1B</option>
+          <option value="mid">Mid $1B–$10B</option>
+          <option value="large">Large $10B–$100B</option>
+          <option value="mega">Mega &gt; $100B</option>
+        </select>
+      </label>
+      <button type="submit">筛选</button>
+    </form>
+    <div class="layout">
+      <section>
+        <div id="detailBox" class="detail idle">从左侧榜单点选一枚币，会打 <code>CMC GET /v1/cryptocurrency/quotes/latest</code> 做实时确认。</div>
+        <div id="tableBox" class="loading">加载行情…</div>
+      </section>
+      <aside>
+        <div class="auth">
+          <div class="tiny">Private JWT 演示用户</div>
+          <p id="authState">尚未登录。点下面签发 TestToken（仅本机）。</p>
+          <button id="loginBtn" type="button">以 demo 用户登录</button>
+        </div>
+        <div class="side">
+          <h3>Watchlist</h3>
+          <div id="watchBox" class="tiny">登录后可从表格加入自选。</div>
+        </div>
+        <div class="side">
+          <h3>Alerts</h3>
+          <form id="alertForm">
+            <label>CMC ID<input name="cmcID" type="number" required /></label>
+            <label>类型
+              <select name="kind">
+                <option value="price_above">price_above</option>
+                <option value="price_below">price_below</option>
+                <option value="pct_24h_abs">pct_24h_abs</option>
+              </select>
+            </label>
+            <label>阈值<input name="threshold" type="number" step="0.0001" required /></label>
+            <button type="submit">创建告警</button>
+          </form>
+          <button id="checkAlertsBtn" class="ghost" type="button" style="margin-top:8px">Check alerts now</button>
+          <div id="alertCheckMsg" class="tiny" style="margin-top:8px"></div>
+          <div id="alertBox" class="tiny"></div>
+        </div>
+      </aside>
+    </div>
+  </main>
+  <footer>
+    数据来源 CoinMarketCap。管理后台：<a href="/">/</a> · OpenAPI：<a href="/swagger/">/swagger/</a> ·
+    更新菜单后可 CRUD Watchlist / AlertRule。密钥只走环境变量 <code>CMC_API_KEY</code>。
+  </footer>
+  <script>
+    const state = { token: "", user: "" };
+
+    const fmt = (n, d = 2) => {
+      if (n === undefined || n === null || Number.isNaN(n)) return "—";
+      return Number(n).toLocaleString("en-US", { maximumFractionDigits: d });
+    };
+    const money = (n) => {
+      if (!n) return "—";
+      if (n >= 1e12) return "$" + (n / 1e12).toFixed(2) + "T";
+      if (n >= 1e9) return "$" + (n / 1e9).toFixed(2) + "B";
+      if (n >= 1e6) return "$" + (n / 1e6).toFixed(2) + "M";
+      return "$" + fmt(n, 2);
+    };
+    const cls = (n) => n >= 0 ? "up" : "down";
+
+    async function api(path, options = {}) {
+      const headers = Object.assign({ "Content-Type": "application/json" }, options.headers || {});
+      if (state.token) headers.Authorization = "Bearer " + state.token;
+      const res = await fetch(path, Object.assign({}, options, { headers }));
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || body.success === false) {
+        throw new Error((body.error && (body.error.message || body.error)) || body.msg || res.statusText || "request failed");
+      }
+      return body.data !== undefined ? body.data : body;
+    }
+
+    async function loadStatus() {
+      const box = document.getElementById("statusBox");
+      try {
+        const data = await api("/api/pulse/getstatus");
+        const ingest = data.ingest || {};
+        box.className = "status" + (ingest.source === "sample" ? " sample" : ingest.ok ? "" : " error");
+        const ends = (data.lastByEndpoint || []).map((item) => (item.endpoint || "") + "=" + (item.status || "")).join(" · ");
+        box.textContent = (ingest.ok ? "采集可用 · " : "采集异常 · ") +
+          (ingest.message || "no ingest") +
+          " · source=" + (ingest.source || "none") +
+          " · quotes=" + (data.quoteCount || 0) +
+          " · key=" + (ingest.maskedKey || "unset") +
+          (ends ? " · last: " + ends : "");
+      } catch (err) {
+        box.className = "status error";
+        box.textContent = err.message;
+      }
+    }
+
+    async function loadGlobal() {
+      const root = document.getElementById("metrics");
+      try {
+        const g = await api("/api/pulse/getglobal");
+        root.innerHTML = [
+          ["BTC Dom", fmt(g.btcDominance, 1) + "%"],
+          ["ETH Dom", fmt(g.ethDominance, 1) + "%"],
+          ["总市值", money(g.totalMarketCap)],
+          ["24h 成交", money(g.totalVolume24h)],
+          ["活跃币种", fmt(g.activeCryptocurrencies, 0)],
+          ["来源", g.source || "—"]
+        ].map(([k, v]) => `<div class="metric"><label>${k}</label><b>${v}</b></div>`).join("");
+      } catch (err) {
+        root.innerHTML = `<div class="metric"><label>全球指标</label><b>${err.message}</b></div>`;
+      }
+    }
+
+    async function loadScreener(params) {
+      const box = document.getElementById("tableBox");
+      box.className = "loading";
+      box.textContent = "加载筛选结果…";
+      try {
+        const query = new URLSearchParams(params);
+        const data = await api("/api/pulse/getscreener?" + query.toString());
+        const items = data.items || [];
+        if (!items.length) {
+          box.className = "empty";
+          box.textContent = "没有匹配的币种。若刚启动，等采集完成或检查 CMC_API_KEY。";
+          return;
+        }
+        box.className = "";
+        box.innerHTML = `<table>
+          <thead><tr><th>#</th><th>币种</th><th>价格</th><th>24h</th><th>7d</th><th>成交额</th><th>市值</th><th></th></tr></thead>
+          <tbody>${items.map(row).join("")}</tbody>
+        </table>`;
+        box.querySelectorAll("tr.coin").forEach((tr) => {
+          tr.addEventListener("click", () => {
+            box.querySelectorAll("tr.coin").forEach((row) => row.classList.remove("selected"));
+            tr.classList.add("selected");
+            loadQuote(Number(tr.dataset.id), tr.dataset.symbol);
+          });
+        });
+        box.querySelectorAll("[data-watch]").forEach((btn) => {
+          btn.addEventListener("click", (event) => {
+            event.stopPropagation();
+            addWatch(Number(btn.dataset.watch));
+          });
+        });
+        box.querySelectorAll("[data-alert]").forEach((btn) => {
+          btn.addEventListener("click", (event) => {
+            event.stopPropagation();
+            document.querySelector("#alertForm [name=cmcID]").value = btn.dataset.alert;
+            document.querySelector("#alertForm [name=threshold]").value = btn.dataset.price;
+          });
+        });
+      } catch (err) {
+        box.className = "empty";
+        box.textContent = err.message;
+      }
+    }
+
+    async function loadQuote(cmcID, symbol) {
+      const box = document.getElementById("detailBox");
+      box.className = "detail";
+      box.textContent = "正在请求 CMC quotes/latest…";
+      try {
+        const query = new URLSearchParams();
+        if (cmcID) query.set("id", String(cmcID));
+        if (symbol) query.set("symbol", symbol);
+        const data = await api("/api/pulse/getquote?" + query.toString());
+        const coin = data.coin || {};
+        box.innerHTML = `
+          <div class="badge">CMC quotes/latest</div>
+          <h3>${coin.symbol || symbol || "—"} · ${coin.name || ""}</h3>
+          <div class="metrics">
+            <div class="metric"><label>Price</label><b>$${fmt(coin.priceUSD, coin.priceUSD < 1 ? 4 : 2)}</b></div>
+            <div class="metric"><label>1h</label><b class="${cls(coin.percentChange1h)}">${fmt(coin.percentChange1h)}%</b></div>
+            <div class="metric"><label>24h</label><b class="${cls(coin.percentChange24h)}">${fmt(coin.percentChange24h)}%</b></div>
+            <div class="metric"><label>7d</label><b class="${cls(coin.percentChange7d)}">${fmt(coin.percentChange7d)}%</b></div>
+            <div class="metric"><label>Volume 24h</label><b>${money(coin.volume24h)}</b></div>
+            <div class="metric"><label>Last updated</label><b>${coin.lastUpdated || "—"}</b></div>
+          </div>
+          <p class="tiny">${data.endpoint || "/v1/cryptocurrency/quotes/latest"} · live=${data.live ? "yes" : "no"} · source=${data.source || "—"}<br/>${data.message || ""}</p>`;
+      } catch (err) {
+        box.className = "detail idle";
+        box.textContent = err.message;
+      }
+    }
+
+    function row(item) {
+      return `<tr class="coin" data-id="${item.cmcID}" data-symbol="${item.symbol}">
+        <td>${item.rank || "—"}</td>
+        <td>${item.symbol}<div class="tiny">${item.name}</div></td>
+        <td>$${fmt(item.priceUSD, item.priceUSD < 1 ? 4 : 2)}</td>
+        <td class="${cls(item.percentChange24h)}">${fmt(item.percentChange24h)}%</td>
+        <td class="${cls(item.percentChange7d)}">${fmt(item.percentChange7d)}%</td>
+        <td>${money(item.volume24h)}</td>
+        <td>${money(item.marketCap)}</td>
+        <td>
+          <button type="button" class="ghost" data-watch="${item.cmcID}">自选</button>
+          <button type="button" class="ghost" data-alert="${item.cmcID}" data-price="${item.priceUSD}">告警</button>
+        </td>
+      </tr>`;
+    }
+
+    async function login() {
+      const data = await api("/api/servermanage/testtoken?userid=demo");
+      state.token = data.access_token || data.accessToken;
+      state.user = "demo";
+      document.getElementById("authState").textContent = "已登录 demo。可用自选与告警。";
+      await Promise.all([loadWatch(), loadAlerts()]);
+    }
+
+    async function addWatch(cmcID) {
+      if (!state.token) await login();
+      await api("/api/pulse/addwatchlist", { method: "POST", body: JSON.stringify({ cmcID }) });
+      await loadWatch();
+    }
+
+    async function loadWatch() {
+      const box = document.getElementById("watchBox");
+      if (!state.token) return;
+      const items = await api("/api/pulse/getwatchlist");
+      if (!items.length) { box.textContent = "自选是空的。"; return; }
+      box.innerHTML = items.map((item) => `<div class="watch-item">
+        <div>${item.symbol}<div class="tiny">${item.quote ? "$" + fmt(item.quote.priceUSD) : item.name}</div></div>
+        <button class="ghost" data-del="${item.id}">删除</button>
+      </div>`).join("");
+      box.querySelectorAll("[data-del]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          await api("/api/pulse/deletewatchlist", { method: "POST", body: JSON.stringify({ id: btn.dataset.del }) });
+          await loadWatch();
+        });
+      });
+    }
+
+    async function loadAlerts() {
+      const box = document.getElementById("alertBox");
+      if (!state.token) return;
+      const items = await api("/api/pulse/getalerts");
+      box.innerHTML = items.length ? items.map((item) => `<div class="alert-item">
+        <div>${item.symbol} ${item.kind} ${item.threshold}<div class="tiny">${item.lastMessage || "尚未触发"}</div></div>
+        <button class="ghost" data-adel="${item.id}">删除</button>
+      </div>`).join("") : "还没有告警规则。";
+      box.querySelectorAll("[data-adel]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          await api("/api/pulse/deletealert", { method: "POST", body: JSON.stringify({ id: btn.dataset.adel }) });
+          await loadAlerts();
+        });
+      });
+    }
+
+    document.getElementById("filterForm").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const data = new FormData(event.target);
+      loadScreener(Object.fromEntries(data.entries()));
+    });
+    document.getElementById("loginBtn").addEventListener("click", () => login().catch((err) => {
+      document.getElementById("authState").textContent = err.message;
+    }));
+    document.getElementById("checkAlertsBtn").addEventListener("click", async () => {
+      const msg = document.getElementById("alertCheckMsg");
+      try {
+        if (!state.token) await login();
+        msg.textContent = "正在用 CMC quotes/latest 确认告警…";
+        const data = await api("/api/pulse/checkalerts", { method: "POST", body: "{}" });
+        msg.textContent = (data.message || "checked") +
+          " · endpoint=" + (data.endpoint || "") +
+          " · live=" + (data.live ? "yes" : "no") +
+          " · hits=" + (data.hits || 0);
+        await loadAlerts();
+      } catch (err) {
+        msg.textContent = err.message;
+      }
+    });
+    document.getElementById("alertForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!state.token) await login();
+      const data = Object.fromEntries(new FormData(event.target).entries());
+      await api("/api/pulse/addalert", {
+        method: "POST",
+        body: JSON.stringify({
+          cmcID: Number(data.cmcID),
+          kind: data.kind,
+          threshold: Number(data.threshold)
+        })
+      });
+      await loadAlerts();
+    });
+
+    loadStatus();
+    loadGlobal();
+    loadScreener({ limit: 50 });
+  </script>
+</body>
+</html>

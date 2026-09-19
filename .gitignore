@@ -1,0 +1,9 @@
+*.exe
+/pulse
+/pulse-bin
+etc/*.local.json
+*.db
+*.db-shm
+*.db-wal
+.env
+.DS_Store

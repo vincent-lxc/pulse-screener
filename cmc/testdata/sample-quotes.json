@@ -1,0 +1,35 @@
+{
+  "status": {
+    "timestamp": "2026-09-19T00:00:00.000Z",
+    "error_code": 0,
+    "error_message": "",
+    "elapsed": 7,
+    "credit_count": 1
+  },
+  "data": {
+    "1": {
+      "id": 1,
+      "name": "Bitcoin",
+      "symbol": "BTC",
+      "slug": "bitcoin",
+      "cmc_rank": 1,
+      "circulating_supply": 19800000,
+      "total_supply": 19800000,
+      "max_supply": 21000000,
+      "last_updated": "2026-09-19T00:00:00.000Z",
+      "quote": {
+        "USD": {
+          "price": 64210.55,
+          "volume_24h": 28450000000,
+          "percent_change_1h": 0.21,
+          "percent_change_24h": 1.84,
+          "percent_change_7d": -2.11,
+          "market_cap": 1271400000000,
+          "market_cap_dominance": 54.2,
+          "fully_diluted_market_cap": 1348410000000,
+          "last_updated": "2026-09-19T00:00:00.000Z"
+        }
+      }
+    }
+  }
+}
