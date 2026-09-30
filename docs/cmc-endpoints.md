@@ -164,7 +164,7 @@ Pulse only keeps plan counters. The API key itself is never stored.
   "data": {
     "plan": {
       "credit_limit_monthly": 10000,
-      "credit_limit_monthly_reset": 432000,
+      "credit_limit_monthly_reset": "In 3 days, 19 hours, 56 minutes",
       "rate_limit_minute": 30
     }
   }

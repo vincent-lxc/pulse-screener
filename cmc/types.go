@@ -104,7 +104,7 @@ type KeyInfo struct {
 
 // KeyPlan 描述当前套餐的信用与限速，供演示状态页展示。
 type KeyPlan struct {
-	CreditLimitMonthly     int `json:"credit_limit_monthly"`
-	CreditLimitMonthlyReset int `json:"credit_limit_monthly_reset"`
-	RateLimitMinute        int `json:"rate_limit_minute"`
+	CreditLimitMonthly      int    `json:"credit_limit_monthly"`
+	CreditLimitMonthlyReset string `json:"credit_limit_monthly_reset"`
+	RateLimitMinute         int    `json:"rate_limit_minute"`
 }

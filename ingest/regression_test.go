@@ -86,12 +86,12 @@ func TestRunRecordsEachEndpointOutcome(t *testing.T) {
 		case cmc.GlobalMetricsPath:
 			_ = json.NewEncoder(w).Encode(global)
 		default:
-			_, _ = w.Write([]byte(`{"data":{}}`))
+			_, _ = w.Write([]byte(`{"data":{"plan":{"credit_limit_monthly":120000,"credit_limit_monthly_reset":"In 3 days, 19 hours, 56 minutes","rate_limit_minute":60}}}`))
 		}
 	}))
 	defer server.Close()
 	client := &cmc.Client{BaseURL: server.URL, APIKey: "stub-key", HTTP: server.Client()}
-	if status := runOnceWithClient(context.Background(), client); !status.OK {
+	if status := runOnceWithClient(context.Background(), client); !status.OK || status.MonthlyCreditLimit != 120000 || status.RateLimitMinute != 60 {
 		t.Fatalf("success: %#v", status)
 	}
 	fail = true
