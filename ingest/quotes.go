@@ -41,18 +41,12 @@ func LookupQuoteWithClient(ctx context.Context, client *cmc.Client, cmcID int, s
 	now := time.Now().UTC()
 	resp, err := fetchQuotes(ctx, client, cmcID, symbol)
 	if err == nil && resp != nil {
-		coins := resp.Coins()
+		coins := validCoins(resp.Coins())
 		if err := persistCoins(coins, now, "cmc"); err != nil {
 			return nil, err
 		}
 		recordQuoteCall(cmc.QuotesLatestPath, "ok", "cmc", len(coins), now)
 		coin := pickCoin(coins, cmcID, symbol)
-		if coin == nil && cmcID > 0 {
-			coin, _ = models.NewCoinQuote().FindByCmcID(cmcID)
-		}
-		if coin == nil && symbol != "" {
-			coin, _ = models.NewCoinQuote().FindBySymbol(symbol)
-		}
 		if coin == nil {
 			return nil, models.NewBusinessError("CMC quotes/latest 没有返回该币种")
 		}
@@ -65,6 +59,7 @@ func LookupQuoteWithClient(ctx context.Context, client *cmc.Client, cmcID int, s
 		}, nil
 	}
 
+	recordQuoteCall(cmc.QuotesLatestPath, "error", "cmc", 0, now)
 	fallback, ferr := localOrSampleQuote(cmcID, symbol)
 	if ferr != nil {
 		return nil, ferr
@@ -77,7 +72,7 @@ func LookupQuoteWithClient(ctx context.Context, client *cmc.Client, cmcID int, s
 	}
 	message := "CMC quotes/latest unavailable; showing local snapshot"
 	if err != nil {
-		message = err.Error() + " Showing local or sample snapshot."
+		message = "CMC quotes/latest unavailable; showing local or sample snapshot. Alerts are disabled for fallback quotes."
 	}
 	return &QuoteLookup{
 		Coin:     fallback,
@@ -103,32 +98,24 @@ func RefreshQuotesAndEvaluateWithClient(ctx context.Context, client *cmc.Client,
 	}
 	resp, err := client.QuotesLatest(ctx, ids)
 	if err != nil {
-		result.Message = err.Error()
-		if cmc.AllowSample() {
-			if sample, sampleErr := cmc.SampleQuotes(); sampleErr == nil {
-				_ = persistCoins(sample.Coins(), now, "sample")
-				result.Source = "sample"
-				result.Quotes = len(sample.Coins())
-				result.Hits = evaluateAlerts(now)
-				result.Message = err.Error() + " Evaluated against sample/local quotes."
-				return result, nil
-			}
-		}
-		result.Hits = evaluateAlerts(now)
+		recordQuoteCall(cmc.QuotesLatestPath, "error", "cmc", 0, now)
 		result.Source = "snapshot"
-		result.Message = err.Error() + " Evaluated against last SQLite snapshot."
+		result.Message = "CMC quotes/latest unavailable; alerts were not evaluated."
 		return result, nil
 	}
-	coins := resp.Coins()
+	coins := validCoins(resp.Coins())
 	if err := persistCoins(coins, now, "cmc"); err != nil {
 		return nil, err
 	}
 	recordQuoteCall(cmc.QuotesLatestPath, "ok", "cmc", len(coins), now)
-	result.Live = true
+	result.Live = len(coins) > 0
 	result.Source = "cmc"
 	result.Quotes = len(coins)
-	result.Hits = evaluateAlerts(now)
+	result.Hits = evaluateAlerts(now, coins)
 	result.Message = "alerts confirmed with CMC GET /v1/cryptocurrency/quotes/latest"
+	if len(coins) == 0 {
+		result.Message = "CMC quotes/latest returned no valid USD quotes; alerts were not evaluated."
+	}
 	return result, nil
 }
 

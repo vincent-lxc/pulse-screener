@@ -24,8 +24,8 @@ CMC_API_KEY=... go run ./cmd/pulse -view 43123 -p 18091 -grpc 19091
 
 ```bash
 go test ./...
-CMC_API_KEY=... go build -o pulse ./cmd/pulse
-./pulse -view 43123 -p 18091 -grpc 19091
+go build -o pulse ./cmd/pulse
+CMC_API_KEY=... ./pulse -view 43123 -p 18091 -grpc 19091
 ```
 
 然后打开：
@@ -39,7 +39,7 @@ CMC_API_KEY=... go build -o pulse ./cmd/pulse
 
 `-p 18091` 是框架 `servermanage` 端口；Pulse 业务进程会再占相邻端口（首次生成的 `etc/pulse.json`，本环境是 `18092`）。评委和脚本请走 `43123`，不必记业务端口。
 
-没有真实密钥时，占位值（空、`placeholder`、`your-key-here`）会在打 CMC 之前失败，错误信息明确。默认 `PULSE_ALLOW_SAMPLE` 会加载 `cmc/testdata/` 脱敏样例，页面标记 `source=sample`，方便无密钥走完点击路径。设了真密钥后只走 live CMC。
+没有真实密钥时，占位值（空、`placeholder`、`your-key-here`）会在打 CMC 之前失败，错误信息明确。默认 `PULSE_ALLOW_SAMPLE` 会加载 `cmc/testdata/` 脱敏样例，页面标记 `source=sample`，方便无密钥走完点击路径。设了真密钥后只走 live CMC。样例仅用于展示，不触发提醒；报价请求失败或未返回的资产不会使用旧快照触发提醒。密钥必须设置在运行进程的环境中，构建时设置不会传给可执行文件。
 
 ```bash
 # 占位密钥：进程不崩，状态接口返回清晰错误

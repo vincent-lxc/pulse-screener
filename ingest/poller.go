@@ -82,39 +82,39 @@ func RunOnce(ctx context.Context) *dto.IngestStatus {
 	}
 	mu.Unlock()
 
-	client := cmc.NewFromEnv()
-	status := &dto.IngestStatus{
-		KeyConfigured: client.KeyConfigured(),
-		MaskedKey:     client.MaskedKey(),
-		FetchedAt:     time.Now().UTC(),
-	}
+	return runOnceWithClient(ctx, cmc.NewFromEnv())
+}
+
+func runOnceWithClient(ctx context.Context, client *cmc.Client) *dto.IngestStatus {
+	status := &dto.IngestStatus{KeyConfigured: client.KeyConfigured(), MaskedKey: client.MaskedKey(), FetchedAt: time.Now().UTC(), Source: "cmc", OK: true}
 	startedAt := time.Now()
-	if !client.KeyConfigured() {
-		status.Message = cmc.ErrMissingAPIKey.Error()
-		if cmc.AllowSample() {
-			if err := persistSample(status); err != nil {
+	record := func(endpoint string, count, credits int, err error) {
+		status.Endpoints = append(status.Endpoints, endpoint)
+		run := models.NewIngestRun()
+		run.Endpoint, run.Source, run.Status = endpoint, "cmc", "ok"
+		run.ItemCount, run.CreditCount = count, credits
+		run.FetchedAt = time.Now().UTC()
+		run.DurationMs = time.Since(startedAt).Milliseconds()
+		if err != nil {
+			run.Status = "error"
+			run.Message = "CMC request or snapshot persistence failed"
+			status.Message = run.Message
+			if endpoint != cmc.KeyInfoPath {
 				status.OK = false
-				status.Message = err.Error()
-			} else {
-				status.OK = true
-				status.Source = "sample"
-				status.Message = cmc.ErrMissingAPIKey.Error() + " Loaded offline sample quotes for the demo UI."
 			}
 		}
-		recordRuns(status, time.Since(startedAt))
-		setStatus(status)
-		return status
+		status.Credits += credits
+		if err := run.Insert(); err != nil {
+			logx.Errorw("ingest_run_insert_failed", logx.Field("error", err.Error()))
+		}
 	}
-
-	listings, err := client.ListingsLatest(ctx, 1, 100)
-	if err != nil {
+	if !client.KeyConfigured() {
 		status.OK = false
-		status.Message = err.Error()
+		status.Message = cmc.ErrMissingAPIKey.Error()
 		if cmc.AllowSample() {
-			if sampleErr := persistSample(status); sampleErr == nil {
-				status.OK = true
+			if err := persistSample(status); err == nil {
 				status.Source = "sample"
-				status.Message = err.Error() + " Fell back to offline sample quotes."
+				status.Message += " Loaded demo samples; alerts are disabled."
 			}
 		}
 		recordRuns(status, time.Since(startedAt))
@@ -122,60 +122,43 @@ func RunOnce(ctx context.Context) *dto.IngestStatus {
 		return status
 	}
 	now := time.Now().UTC()
-	if err := persistListings(listings, now, "cmc"); err != nil {
-		status.OK = false
-		status.Message = err.Error()
-		recordRuns(status, time.Since(startedAt))
-		setStatus(status)
-		return status
+	credits := 0
+	listings, err := client.ListingsLatest(ctx, 1, 100)
+	if err == nil {
+		err = persistListings(listings, now, "cmc")
+		status.Listings = len(listings.Data)
+		credits = listings.Status.CreditCount
 	}
-	status.Listings = len(listings.Data)
-	status.Credits += listings.Status.CreditCount
-	status.Endpoints = append(status.Endpoints, cmc.ListingsLatestPath)
-
-	if quotes, err := client.QuotesLatest(ctx, quoteIDs(listings, WatchedQuoteIDs())); err != nil {
-		logx.Errorw("cmc_quotes_latest_failed", logx.Field("error", err.Error()))
-		if status.Message == "" {
-			status.Message = err.Error()
+	record(cmc.ListingsLatestPath, status.Listings, credits, err)
+	credits = 0
+	quotes, err := client.QuotesLatest(ctx, quoteIDs(listings, WatchedQuoteIDs()))
+	if err == nil {
+		coins := validCoins(quotes.Coins())
+		err = persistCoins(coins, now, "cmc")
+		if err == nil {
+			status.Quotes = len(coins)
+			status.AlertHits = evaluateAlerts(now, coins)
 		}
-	} else if coins := quotes.Coins(); len(coins) > 0 {
-		if err := persistCoins(coins, now, "cmc"); err != nil {
-			status.OK = false
-			status.Message = err.Error()
-			recordRuns(status, time.Since(startedAt))
-			setStatus(status)
-			return status
-		}
-		status.Quotes = len(coins)
-		status.Credits += quotes.Status.CreditCount
-		status.Endpoints = append(status.Endpoints, cmc.QuotesLatestPath)
+		credits = quotes.Status.CreditCount
 	}
-
-	if global, err := client.GlobalMetrics(ctx); err != nil {
-		logx.Errorw("cmc_global_metrics_failed", logx.Field("error", err.Error()))
-		status.Message = err.Error()
-	} else if err := persistGlobal(global, now, "cmc"); err != nil {
-		status.Message = err.Error()
-	} else {
-		status.HasGlobal = true
-		status.Credits += global.Status.CreditCount
-		status.Endpoints = append(status.Endpoints, cmc.GlobalMetricsPath)
+	record(cmc.QuotesLatestPath, status.Quotes, credits, err)
+	credits = 0
+	global, err := client.GlobalMetrics(ctx)
+	if err == nil {
+		err = persistGlobal(global, now, "cmc")
+		status.HasGlobal = err == nil
+		credits = global.Status.CreditCount
 	}
-
-	if info, err := client.KeyInfo(ctx); err == nil && info != nil {
+	record(cmc.GlobalMetricsPath, 0, credits, err)
+	info, err := client.KeyInfo(ctx)
+	if err == nil && info != nil {
 		status.MonthlyCreditLimit = info.Data.Plan.CreditLimitMonthly
 		status.RateLimitMinute = info.Data.Plan.RateLimitMinute
-		status.Endpoints = append(status.Endpoints, cmc.KeyInfoPath)
 	}
-
-	hits := evaluateAlerts(now)
-	status.AlertHits = hits
-	status.OK = true
-	status.Source = "cmc"
+	record(cmc.KeyInfoPath, 0, 0, err)
 	if status.Message == "" {
 		status.Message = "live CoinMarketCap snapshots stored"
 	}
-	recordRuns(status, time.Since(startedAt))
 	setStatus(status)
 	return status
 }
@@ -205,7 +188,7 @@ func persistSample(status *dto.IngestStatus) error {
 			status.Endpoints = append(status.Endpoints, "sample:"+cmc.GlobalMetricsPath)
 		}
 	}
-	status.AlertHits = evaluateAlerts(now)
+	status.AlertHits = 0
 	return nil
 }
 
@@ -218,6 +201,15 @@ func persistListings(resp *cmc.ListingsResponse, now time.Time, source string) e
 
 func persistCoins(items []cmc.ListingCoin, now time.Time, source string) error {
 	for _, item := range items {
+		if source == "sample" {
+			existing, err := models.NewCoinQuote().FindByCmcID(item.ID)
+			if err != nil {
+				return err
+			}
+			if existing != nil && existing.Source == "cmc" {
+				continue
+			}
+		}
 		quote := item.Quote["USD"]
 		model := models.NewCoinQuote()
 		model.CmcID = item.ID
@@ -297,7 +289,24 @@ func persistGlobal(resp *cmc.GlobalResponse, now time.Time, source string) error
 	return model.Upsert()
 }
 
-func evaluateAlerts(now time.Time) int {
+func validCoins(items []cmc.ListingCoin) []cmc.ListingCoin {
+	valid := make([]cmc.ListingCoin, 0, len(items))
+	for _, item := range items {
+		if usd, ok := item.Quote["USD"]; ok && item.ID > 0 && usd.Price > 0 {
+			valid = append(valid, item)
+		}
+	}
+	return valid
+}
+
+func evaluateAlerts(now time.Time, coins []cmc.ListingCoin) int {
+	fresh := make(map[int]cmc.ListingCoin, len(coins))
+	for _, coin := range coins {
+		fresh[coin.ID] = coin
+	}
+	if len(fresh) == 0 {
+		return 0
+	}
 	rules, err := models.NewAlertRule().QueryEnabled()
 	if err != nil {
 		logx.Errorw("alert_query_failed", logx.Field("error", err.Error()))
@@ -305,10 +314,12 @@ func evaluateAlerts(now time.Time) int {
 	}
 	hits := 0
 	for _, rule := range rules {
-		quote, err := models.NewCoinQuote().FindByCmcID(rule.CmcID)
-		if err != nil || quote == nil {
+		coin, returned := fresh[rule.CmcID]
+		if !returned {
 			continue
 		}
+		usd := coin.Quote["USD"]
+		quote := &models.CoinQuote{CmcID: coin.ID, Symbol: coin.Symbol, PriceUSD: usd.Price, PercentChange24h: usd.PercentChange24h, FetchedAt: now, Source: "cmc"}
 		hit, ok := models.EvaluateAlert(rule, quote, now)
 		if !ok {
 			continue
